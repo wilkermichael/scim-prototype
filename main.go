@@ -12,6 +12,7 @@ import (
 
 func main() {
 	logger := logrus.New()
+	logger.SetLevel(logrus.TraceLevel)
 	logger.Info("Starting SCIM server")
 
 	// Create a service provider configuration
@@ -75,12 +76,15 @@ func main() {
 
 	server, err := scim.NewServer(&serverArgs, serverOpts...)
 	if err != nil {
-		logger.Panicf("Failed to start SCIM server: %v", err)
+		logger.Fatalf("Failed to start SCIM server: %v", err)
 	}
 
 	// Register the SCIM server's HTTP handler at a specific path prefix.
 	http.Handle("/scim/v2/", http.StripPrefix("/scim/v2", server))
 
 	// Start the server
-	http.ListenAndServe(":8080", nil)
+	logger.Info("SCIM server is running on http://localhost:8080/scim/v2/")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		logger.Fatalf("Failed to start SCIM server: %v", err)
+	}
 }
