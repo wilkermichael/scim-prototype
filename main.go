@@ -1,6 +1,9 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"net/http"
 
 	"github.com/elimity-com/scim"
@@ -12,7 +15,7 @@ import (
 
 func main() {
 	logger := logrus.New()
-	logger.SetLevel(logrus.TraceLevel)
+	logger.SetLevel(logrus.DebugLevel)
 	logger.Formatter = &logrus.TextFormatter{
 		FullTimestamp: true,
 	}
@@ -114,6 +117,27 @@ func (m middleware) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Log the request
 		m.logger.Printf("Received request: %s %s", r.Method, r.URL.Path)
+
+		// Read the body
+		if m.logger.Level == logrus.DebugLevel {
+			switch r.Method {
+			case http.MethodPost, http.MethodPatch, http.MethodPut:
+				b, err := io.ReadAll(r.Body)
+				if err != nil {
+					m.logger.Errorf("Failed to read request body: %v", err)
+				}
+
+				var prettyJSON bytes.Buffer
+				err = json.Indent(&prettyJSON, b, "", " \t")
+				if err != nil {
+					m.logger.Errorf("Failed to indent request body: %v", err)
+				}
+				m.logger.Debugf("Request body: \n%s", prettyJSON.String())
+
+				// Replace read bytes
+				r.Body = io.NopCloser(bytes.NewBuffer(b))
+			}
+		}
 
 		// Call the next handler
 		next.ServeHTTP(w, r)
