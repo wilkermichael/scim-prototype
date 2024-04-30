@@ -183,7 +183,7 @@ func (h UserResourceHandler) Patch(_ *http.Request, id string, operations []scim
 }
 
 func (h UserResourceHandler) Replace(_ *http.Request, id string, attributes scim.ResourceAttributes) (scim.Resource, error) {
-	h.logger.Info("Replacing user %s", id)
+	h.logger.Infof("Replacing user %v", id)
 	// check if resource exists
 	_, ok := h.data[id]
 	if !ok {

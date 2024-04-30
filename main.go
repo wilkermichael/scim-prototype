@@ -13,6 +13,9 @@ import (
 func main() {
 	logger := logrus.New()
 	logger.SetLevel(logrus.TraceLevel)
+	logger.Formatter = &logrus.TextFormatter{
+		FullTimestamp: true,
+	}
 	logger.Info("Starting SCIM server")
 
 	// Create a service provider configuration
@@ -28,6 +31,19 @@ func main() {
 				Name:       "userName",
 				Required:   true,
 				Uniqueness: scimSchema.AttributeUniquenessServer(),
+			})),
+			scimSchema.SimpleCoreAttribute(scimSchema.SimpleStringParams(scimSchema.StringParams{
+				Description: optional.NewString("A String that is an identifier for the resource as defined by the provisioning client."),
+				Name:        "externalId",
+				Uniqueness:  scimSchema.AttributeUniquenessServer(),
+			})),
+			scimSchema.SimpleCoreAttribute(scimSchema.SimpleStringParams(scimSchema.StringParams{
+				Name: "nickName",
+			})),
+			scimSchema.SimpleCoreAttribute(scimSchema.SimpleBooleanParams(scimSchema.BooleanParams{
+				Description: optional.NewString("A boolean denoting that the user is either active or disabled."),
+				Name:        "active",
+				Required:    false,
 			})),
 		},
 	}
@@ -80,11 +96,26 @@ func main() {
 	}
 
 	// Register the SCIM server's HTTP handler at a specific path prefix.
-	http.Handle("/scim/v2/", http.StripPrefix("/scim/v2", server))
+	m := middleware{logger: logger}
+	http.Handle("/scim/v2/", m.loggingMiddleware(http.StripPrefix("/scim/v2", server)))
 
 	// Start the server
 	logger.Info("SCIM server is running on http://localhost:8080/scim/v2/")
 	if err := http.ListenAndServe(":8080", nil); err != nil {
 		logger.Fatalf("Failed to start SCIM server: %v", err)
 	}
+}
+
+type middleware struct {
+	logger *logrus.Logger
+}
+
+func (m middleware) loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Log the request
+		m.logger.Printf("Received request: %s %s", r.Method, r.URL.Path)
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
+	})
 }
