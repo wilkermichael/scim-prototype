@@ -9,6 +9,7 @@ import (
 	"github.com/elimity-com/scim"
 	"github.com/elimity-com/scim/optional"
 	scimSchema "github.com/elimity-com/scim/schema"
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	"github.com/wilkermichael/scim-prototype/handler"
 )
@@ -26,7 +27,7 @@ func main() {
 
 	// Create user schema
 	s := scimSchema.Schema{
-		ID:          "urn:ietf:params:scim:schemas:core:2.0:User",
+		ID:          scimSchema.UserSchema,
 		Name:        optional.NewString("User"),
 		Description: optional.NewString("User Account"),
 		Attributes: []scimSchema.CoreAttribute{
@@ -51,20 +52,6 @@ func main() {
 		},
 	}
 
-	extension := scimSchema.Schema{
-		ID:          "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User",
-		Name:        optional.NewString("EnterpriseUser"),
-		Description: optional.NewString("Enterprise User"),
-		Attributes: []scimSchema.CoreAttribute{
-			scimSchema.SimpleCoreAttribute(scimSchema.SimpleStringParams(scimSchema.StringParams{
-				Name: "employeeNumber",
-			})),
-			scimSchema.SimpleCoreAttribute(scimSchema.SimpleStringParams(scimSchema.StringParams{
-				Name: "organization",
-			})),
-		},
-	}
-
 	resourceHandler := handler.NewUserResourceHandler(logger)
 
 	// Create Resource Types
@@ -75,10 +62,7 @@ func main() {
 			Endpoint:    "/Users",
 			Description: optional.NewString("User Account"),
 			Schema:      s,
-			SchemaExtensions: []scim.SchemaExtension{
-				{Schema: extension},
-			},
-			Handler: resourceHandler,
+			Handler:     resourceHandler,
 		},
 	}
 
@@ -98,13 +82,14 @@ func main() {
 		logger.Fatalf("Failed to start SCIM server: %v", err)
 	}
 
-	// Register the SCIM server's HTTP handler at a specific path prefix.
+	r := mux.NewRouter()
 	m := middleware{logger: logger}
-	http.Handle("/scim/v2/", m.loggingMiddleware(http.StripPrefix("/scim/v2", server)))
+	r.Use(m.loggingMiddleware)
+	r.PathPrefix("/scim/v2/").Handler(http.StripPrefix("/scim/v2", server))
 
 	// Start the server
 	logger.Info("SCIM server is running on http://localhost:8080/scim/v2/")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	if err := http.ListenAndServe(":8080", r); err != nil {
 		logger.Fatalf("Failed to start SCIM server: %v", err)
 	}
 }

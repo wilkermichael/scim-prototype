@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -98,7 +99,7 @@ func (h UserResourceHandler) Get(_ *http.Request, id string) (scim.Resource, err
 	}, nil
 }
 
-func (h UserResourceHandler) GetAll(_ *http.Request, params scim.ListRequestParams) (scim.Page, error) {
+func (h UserResourceHandler) GetAll(r *http.Request, params scim.ListRequestParams) (scim.Page, error) {
 	h.logger.Info("Getting all users")
 	if params.Count == 0 {
 		return scim.Page{
@@ -106,12 +107,27 @@ func (h UserResourceHandler) GetAll(_ *http.Request, params scim.ListRequestPara
 		}, nil
 	}
 
+	// Extract and decode filter
+	// When creating a user Okta will call GetAll and check by username to make sure that the username is unique
+	var attributeName string
+	var attributeValue string
+
+	filter := r.URL.Query().Get("filter")
+	if filter != "" {
+		decodeFilter, _ := url.QueryUnescape(filter)
+
+		// Parse the filter
+		parts := strings.Split(decodeFilter, " ")
+		attributeName = parts[0]
+		attributeValue = strings.Trim(parts[2], "\"")
+	}
+
 	resources := make([]scim.Resource, 0)
 	i := 1
-
 	for k, v := range h.data {
-		if i > (params.StartIndex + params.Count - 1) {
-			break
+		// Just handle the equal case
+		if filter != "" && !(v.resourceAttributes[attributeName] == attributeValue) {
+			continue
 		}
 
 		if i >= params.StartIndex {
